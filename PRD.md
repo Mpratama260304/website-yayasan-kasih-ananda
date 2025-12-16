@@ -13,11 +13,11 @@ Aplikasi ini memerlukan sistem autentikasi lengkap, manajemen konten dinamis, fo
 ## Essential Features
 
 ### 1. Authentication System
-- **Functionality**: Login admin dengan username dan password, session management dengan JWT
+- **Functionality**: Login admin dengan username dan password, session management dengan server-side validation
 - **Purpose**: Melindungi area admin dan memastikan hanya pengguna terotorisasi yang dapat mengelola konten
 - **Trigger**: User mengakses halaman admin atau mencoba akses protected route
-- **Progression**: Kunjungi /admin → Redirect ke login → Input credentials → Validasi → Set session → Redirect ke dashboard
-- **Success criteria**: Admin dapat login, session persistent across refresh, auto-redirect untuk protected routes
+- **Progression**: Kunjungi /admin → Redirect ke login → Input credentials → Validasi → Create session (Spark KV) → Set sessionId (localStorage) → Redirect ke dashboard → Page refresh → Validate session → Restore user state
+- **Success criteria**: Admin dapat login, session persistent across refresh via server-side validation, auto-redirect untuk protected routes, secure password hashing dengan bcryptjs
 
 ### 2. Content Management (Berita/Posts)
 - **Functionality**: CRUD operations untuk artikel berita yayasan

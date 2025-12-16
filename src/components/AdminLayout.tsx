@@ -14,8 +14,8 @@ interface AdminLayoutProps {
 export function AdminLayout({ children, currentRoute, onNavigate }: AdminLayoutProps) {
   const { session, logout } = useAuth()
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     toast.success('Logout berhasil')
     onNavigate('home')
   }

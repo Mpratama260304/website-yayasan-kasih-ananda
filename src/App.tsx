@@ -17,13 +17,24 @@ import { EnrollmentsPage } from '@/pages/admin/EnrollmentsPage'
 import { useEffect } from 'react'
 
 function RouteHandler({ route, navigate }: { route: RouteType; navigate: (r: RouteType) => void }) {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
 
   useEffect(() => {
-    if (route.startsWith('admin-') && route !== 'admin-login' && !isAuthenticated) {
+    if (!isLoading && route.startsWith('admin-') && route !== 'admin-login' && !isAuthenticated) {
       navigate('admin-login')
     }
-  }, [route, isAuthenticated, navigate])
+  }, [route, isAuthenticated, isLoading, navigate])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-muted-foreground">Memuat...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (route === 'admin-login') {
     return <LoginPage onNavigate={navigate} />

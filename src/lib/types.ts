@@ -30,6 +30,7 @@ export interface Enrollment {
 }
 
 export interface AuthSession {
+  sessionId: string
   user: {
     id: string
     username: string
@@ -38,6 +39,7 @@ export interface AuthSession {
   }
   token: string
   expiresAt: string
+  createdAt: string
 }
 
 export type UnitType = 'SD' | 'SMP' | 'SMK' | 'YAYASAN'
