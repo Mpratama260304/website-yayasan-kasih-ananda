@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { useState, useRef } from 'react'
-import { Plus, Trash, Pencil, Image as ImageIcon, Folder, Tag, Calendar, FolderOpen, Heart, ChatCircle } from '@phosphor-icons/react'
+import { Plus, Trash, Pencil, Image as ImageIcon, Folder, Tag, Calendar, FolderOpen, Heart, ChatCircle, Images, X } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { generateId } from '@/lib/auth'
 import { format } from 'date-fns'
@@ -31,6 +32,14 @@ interface AlbumFormData {
   description: string
   unit: UnitType
   eventDate: string
+}
+
+interface ImagePreview {
+  id: string
+  dataUrl: string
+  file: File
+  title: string
+  description: string
 }
 
 export function GalleryPage() {
@@ -60,7 +69,9 @@ export function GalleryPage() {
   const [deleteAlbum, setDeleteAlbum] = useState<GalleryAlbum | null>(null)
   const [selectedUnit, setSelectedUnit] = useState<UnitType | 'ALL'>('ALL')
   const [imagePreview, setImagePreview] = useState<string>('')
+  const [imagePreviews, setImagePreviews] = useState<ImagePreview[]>([])
   const [activeTab, setActiveTab] = useState<'photos' | 'albums'>('photos')
+  const [isMultipleUpload, setIsMultipleUpload] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [formData, setFormData] = useState<PhotoFormData>({
@@ -106,8 +117,49 @@ export function GalleryPage() {
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    if (isMultipleUpload) {
+      const validFiles: File[] = []
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error(`File ${file.name} melebihi 5MB dan dilewati`)
+          continue
+        }
+        validFiles.push(file)
+      }
+
+      if (validFiles.length === 0) {
+        toast.error('Tidak ada file valid untuk diupload')
+        return
+      }
+
+      const newPreviews: ImagePreview[] = []
+      let processedCount = 0
+
+      validFiles.forEach((file) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          newPreviews.push({
+            id: generateId(),
+            dataUrl: reader.result as string,
+            file,
+            title: file.name.replace(/\.[^/.]+$/, ''),
+            description: ''
+          })
+          processedCount++
+
+          if (processedCount === validFiles.length) {
+            setImagePreviews(prev => [...prev, ...newPreviews])
+            toast.success(`${validFiles.length} foto siap diupload`)
+          }
+        }
+        reader.readAsDataURL(file)
+      })
+    } else {
+      const file = files[0]
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Ukuran file maksimal 5MB')
         return
@@ -121,7 +173,9 @@ export function GalleryPage() {
     }
   }
 
-  const handleOpenDialog = (photo?: GalleryPhoto) => {
+  const handleOpenDialog = (photo?: GalleryPhoto, multipleMode = false) => {
+    setIsMultipleUpload(multipleMode)
+    
     if (photo) {
       setEditingPhoto(photo)
       setFormData({
@@ -132,6 +186,7 @@ export function GalleryPage() {
         albumId: photo.albumId || '',
       })
       setImagePreview(photo.imageData)
+      setImagePreviews([])
     } else {
       setEditingPhoto(null)
       setFormData({
@@ -142,6 +197,7 @@ export function GalleryPage() {
         albumId: '',
       })
       setImagePreview('')
+      setImagePreviews([])
     }
     setIsDialogOpen(true)
   }
@@ -149,6 +205,7 @@ export function GalleryPage() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false)
     setEditingPhoto(null)
+    setIsMultipleUpload(false)
     setFormData({
       title: '',
       description: '',
@@ -157,6 +214,7 @@ export function GalleryPage() {
       albumId: '',
     })
     setImagePreview('')
+    setImagePreviews([])
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -165,6 +223,37 @@ export function GalleryPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
+    if (isMultipleUpload) {
+      if (imagePreviews.length === 0) {
+        toast.error('Minimal pilih 1 foto untuk diupload')
+        return
+      }
+
+      if (!formData.category) {
+        toast.error('Kategori harus dipilih')
+        return
+      }
+
+      const newPhotos: GalleryPhoto[] = imagePreviews.map(preview => ({
+        id: preview.id,
+        title: preview.title || 'Untitled',
+        description: preview.description,
+        imageData: preview.dataUrl,
+        unit: formData.unit,
+        category: formData.category,
+        albumId: formData.albumId,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: session?.user?.name || 'Admin',
+        likes: [],
+        comments: [],
+      }))
+
+      setPhotos((current) => [...(current || []), ...newPhotos])
+      toast.success(`${newPhotos.length} foto berhasil ditambahkan`)
+      handleCloseDialog()
+      return
+    }
+
     if (!formData.title.trim()) {
       toast.error('Judul foto harus diisi')
       return
@@ -333,6 +422,16 @@ export function GalleryPage() {
     }
   }
 
+  const handleRemovePreview = (id: string) => {
+    setImagePreviews(prev => prev.filter(p => p.id !== id))
+  }
+
+  const handleUpdatePreview = (id: string, field: 'title' | 'description', value: string) => {
+    setImagePreviews(prev => prev.map(p => 
+      p.id === id ? { ...p, [field]: value } : p
+    ))
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -342,7 +441,7 @@ export function GalleryPage() {
             Kelola foto kegiatan sekolah per unit
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2">
@@ -417,125 +516,292 @@ export function GalleryPage() {
 
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => handleOpenDialog()} className="gap-2">
+              <Button onClick={() => handleOpenDialog(undefined, false)} className="gap-2">
                 <Plus size={18} />
                 Tambah Foto
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>{editingPhoto ? 'Edit Foto' : 'Tambah Foto Baru'}</DialogTitle>
+                <DialogTitle>
+                  {editingPhoto ? 'Edit Foto' : isMultipleUpload ? 'Upload Foto Multiple' : 'Tambah Foto Baru'}
+                </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="image">Foto *</Label>
-                  <div className="space-y-2">
-                    <Input
-                      id="image"
-                      type="file"
-                      accept="image/*"
-                      ref={fileInputRef}
-                      onChange={handleImageChange}
-                    />
-                    {imagePreview && (
-                      <div className="relative rounded-lg overflow-hidden border">
-                        <img
-                          src={imagePreview}
-                          alt="Preview"
-                          className="w-full h-auto"
-                        />
+                {!editingPhoto && (
+                  <div className="flex gap-2 p-2 bg-muted rounded-lg">
+                    <Button
+                      type="button"
+                      variant={!isMultipleUpload ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => {
+                        setIsMultipleUpload(false)
+                        setImagePreviews([])
+                        if (fileInputRef.current) fileInputRef.current.value = ''
+                      }}
+                      className="flex-1"
+                    >
+                      <Plus size={16} className="mr-2" />
+                      Single Upload
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={isMultipleUpload ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => {
+                        setIsMultipleUpload(true)
+                        setImagePreview('')
+                        if (fileInputRef.current) fileInputRef.current.value = ''
+                      }}
+                      className="flex-1"
+                    >
+                      <Images size={16} className="mr-2" />
+                      Multiple Upload
+                    </Button>
+                  </div>
+                )}
+
+                {isMultipleUpload ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="images">Pilih Foto Multiple *</Label>
+                      <Input
+                        id="images"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        ref={fileInputRef}
+                        onChange={handleImageChange}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Pilih beberapa foto sekaligus. Format: JPG, PNG. Maksimal 5MB per file
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="unit">Unit *</Label>
+                      <Select
+                        value={formData.unit}
+                        onValueChange={(value) => setFormData({ ...formData, unit: value as UnitType, category: '' })}
+                      >
+                        <SelectTrigger id="unit">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {units.map(unit => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Kategori *</Label>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(value) => setFormData({ ...formData, category: value })}
+                      >
+                        <SelectTrigger id="category">
+                          <SelectValue placeholder="Pilih kategori" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getCategoriesForUnit(formData.unit).map(cat => (
+                            <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="album">Album (Opsional)</Label>
+                      <Select
+                        value={formData.albumId}
+                        onValueChange={(value) => setFormData({ ...formData, albumId: value })}
+                      >
+                        <SelectTrigger id="album">
+                          <SelectValue placeholder="Pilih album (opsional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Tanpa Album</SelectItem>
+                          {getAlbumsForUnit(formData.unit).map(album => (
+                            <SelectItem key={album.id} value={album.id}>{album.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {imagePreviews.length > 0 && (
+                      <div className="space-y-3 border-t pt-4">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-base">Preview Foto ({imagePreviews.length})</Label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setImagePreviews([])}
+                          >
+                            Hapus Semua
+                          </Button>
+                        </div>
+                        <ScrollArea className="h-[400px] pr-4">
+                          <div className="space-y-4">
+                            {imagePreviews.map((preview) => (
+                              <Card key={preview.id} className="p-4">
+                                <div className="flex gap-4">
+                                  <div className="w-32 h-32 flex-shrink-0">
+                                    <img
+                                      src={preview.dataUrl}
+                                      alt={preview.title}
+                                      className="w-full h-full object-cover rounded"
+                                    />
+                                  </div>
+                                  <div className="flex-1 space-y-2">
+                                    <Input
+                                      placeholder="Judul foto"
+                                      value={preview.title}
+                                      onChange={(e) => handleUpdatePreview(preview.id, 'title', e.target.value)}
+                                    />
+                                    <Textarea
+                                      placeholder="Deskripsi (opsional)"
+                                      value={preview.description}
+                                      onChange={(e) => handleUpdatePreview(preview.id, 'description', e.target.value)}
+                                      rows={2}
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleRemovePreview(preview.id)}
+                                  >
+                                    <X size={18} />
+                                  </Button>
+                                </div>
+                              </Card>
+                            ))}
+                          </div>
+                        </ScrollArea>
                       </div>
                     )}
-                    <p className="text-xs text-muted-foreground">
-                      Format: JPG, PNG. Maksimal 5MB
-                    </p>
-                  </div>
-                </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="image">Foto *</Label>
+                      <div className="space-y-2">
+                        <Input
+                          id="image"
+                          type="file"
+                          accept="image/*"
+                          ref={fileInputRef}
+                          onChange={handleImageChange}
+                        />
+                        {imagePreview && (
+                          <div className="relative rounded-lg overflow-hidden border">
+                            <img
+                              src={imagePreview}
+                              alt="Preview"
+                              className="w-full h-auto"
+                            />
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Format: JPG, PNG. Maksimal 5MB
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="unit">Unit *</Label>
-                  <Select
-                    value={formData.unit}
-                    onValueChange={(value) => setFormData({ ...formData, unit: value as UnitType, category: '' })}
-                  >
-                    <SelectTrigger id="unit">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {units.map(unit => (
-                        <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="unit">Unit *</Label>
+                      <Select
+                        value={formData.unit}
+                        onValueChange={(value) => setFormData({ ...formData, unit: value as UnitType, category: '' })}
+                      >
+                        <SelectTrigger id="unit">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {units.map(unit => (
+                            <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="category">Kategori *</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(value) => setFormData({ ...formData, category: value })}
-                  >
-                    <SelectTrigger id="category">
-                      <SelectValue placeholder="Pilih kategori" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {getCategoriesForUnit(formData.unit).map(cat => (
-                        <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Kategori *</Label>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(value) => setFormData({ ...formData, category: value })}
+                      >
+                        <SelectTrigger id="category">
+                          <SelectValue placeholder="Pilih kategori" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getCategoriesForUnit(formData.unit).map(cat => (
+                            <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="album">Album (Opsional)</Label>
-                  <Select
-                    value={formData.albumId}
-                    onValueChange={(value) => setFormData({ ...formData, albumId: value })}
-                  >
-                    <SelectTrigger id="album">
-                      <SelectValue placeholder="Pilih album (opsional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Tanpa Album</SelectItem>
-                      {getAlbumsForUnit(formData.unit).map(album => (
-                        <SelectItem key={album.id} value={album.id}>{album.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="album">Album (Opsional)</Label>
+                      <Select
+                        value={formData.albumId}
+                        onValueChange={(value) => setFormData({ ...formData, albumId: value })}
+                      >
+                        <SelectTrigger id="album">
+                          <SelectValue placeholder="Pilih album (opsional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Tanpa Album</SelectItem>
+                          {getAlbumsForUnit(formData.unit).map(album => (
+                            <SelectItem key={album.id} value={album.id}>{album.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="title">Judul Foto *</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Contoh: Upacara Bendera 17 Agustus"
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="title">Judul Foto *</Label>
+                      <Input
+                        id="title"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        placeholder="Contoh: Upacara Bendera 17 Agustus"
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Deskripsi</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Deskripsi singkat tentang foto ini..."
-                    rows={3}
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Deskripsi</Label>
+                      <Textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        placeholder="Deskripsi singkat tentang foto ini..."
+                        rows={3}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={handleCloseDialog}>
                     Batal
                   </Button>
                   <Button type="submit">
-                    {editingPhoto ? 'Update' : 'Tambah'}
+                    {editingPhoto ? 'Update' : isMultipleUpload ? `Upload ${imagePreviews.length} Foto` : 'Tambah'}
                   </Button>
                 </div>
               </form>
             </DialogContent>
           </Dialog>
+          
+          <Button onClick={() => handleOpenDialog(undefined, true)} variant="secondary" className="gap-2">
+            <Images size={18} />
+            Upload Multiple
+          </Button>
         </div>
       </div>
 
