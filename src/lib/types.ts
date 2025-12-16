@@ -49,12 +49,34 @@ export interface GalleryPhoto {
   imageData: string
   unit: UnitType
   category: string
+  albumId?: string
   uploadedAt: string
   uploadedBy: string
+  likes: string[]
+  comments: PhotoComment[]
 }
 
 export interface GalleryCategory {
   id: string
   name: string
   unit: UnitType
+}
+
+export interface GalleryAlbum {
+  id: string
+  name: string
+  description: string
+  unit: UnitType
+  coverPhotoId?: string
+  createdAt: string
+  eventDate?: string
+}
+
+export interface PhotoComment {
+  id: string
+  photoId: string
+  userName: string
+  userAvatar?: string
+  comment: string
+  createdAt: string
 }
