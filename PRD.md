@@ -40,7 +40,14 @@ Aplikasi ini memerlukan sistem autentikasi lengkap, manajemen konten dinamis, fo
 - **Progression**: Login → Dashboard → View stats (total posts, enrollments) → Navigate ke specific features
 - **Success criteria**: Dashboard menampilkan data real-time, navigasi intuitif, logout berfungsi
 
-### 5. Public Website (Multi-page)
+### 5. Photo Gallery System
+- **Functionality**: Upload, organize, and display photos by unit and category
+- **Purpose**: Showcase school activities, achievements, and events to engage visitors
+- **Trigger**: Admin uploads photos through gallery management; public views through gallery page
+- **Progression**: Admin dashboard → Galeri → Upload foto + pilih unit & kategori → Save → Tampil di public gallery → Public browse by unit/category
+- **Success criteria**: Photos organized by unit (SD/SMP/SMK/Yayasan) and category, support image preview, responsive grid layout, admin can CRUD photos and categories
+
+### 6. Public Website (Multi-page)
 - **Functionality**: Homepage, Profil Yayasan, Berita, dan PPDB pages
 - **Purpose**: Memberikan informasi lengkap tentang yayasan kepada publik
 - **Trigger**: User mengakses domain website

@@ -15,11 +15,18 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export function createSession(user: User): AuthSession {
+  const expiresAt = new Date()
+  expiresAt.setHours(expiresAt.getHours() + 24)
+  
   return {
-    userId: user.id,
-    username: user.username,
-    name: user.name,
-    role: user.role
+    user: {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      role: user.role
+    },
+    token: generateId(),
+    expiresAt: expiresAt.toISOString()
   }
 }
 

@@ -1,8 +1,8 @@
 import { useKV } from '@github/spark/hooks'
-import { Post, Enrollment } from '@/lib/types'
+import { Post, Enrollment, GalleryPhoto } from '@/lib/types'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Newspaper, ClipboardText, Eye, EyeSlash } from '@phosphor-icons/react'
+import { Newspaper, ClipboardText, Eye, EyeSlash, Images } from '@phosphor-icons/react'
 import { RouteType } from '@/components/Router'
 
 interface DashboardPageProps {
@@ -12,11 +12,13 @@ interface DashboardPageProps {
 export function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [posts] = useKV<Post[]>('posts', [])
   const [enrollments] = useKV<Enrollment[]>('enrollments', [])
+  const [photos] = useKV<GalleryPhoto[]>('gallery-photos', [])
 
   const publishedPosts = (posts || []).filter(p => p.published).length
   const draftPosts = (posts || []).filter(p => !p.published).length
   const pendingEnrollments = (enrollments || []).filter(e => e.status === 'PENDING').length
   const totalEnrollments = (enrollments || []).length
+  const totalPhotos = (photos || []).length
 
   const stats = [
     {
@@ -34,11 +36,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
       action: () => onNavigate('admin-posts'),
     },
     {
-      title: 'Draft Berita',
-      value: draftPosts,
-      icon: EyeSlash,
-      color: 'bg-muted text-muted-foreground',
-      action: () => onNavigate('admin-posts'),
+      title: 'Foto Galeri',
+      value: totalPhotos,
+      icon: Images,
+      color: 'bg-primary/10 text-primary',
+      action: () => onNavigate('admin-gallery'),
     },
     {
       title: 'Pendaftaran Baru',
@@ -76,7 +78,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
         ))}
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-3 gap-6">
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-foreground">Kelola Berita</h2>
@@ -87,6 +89,19 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
           </p>
           <Button onClick={() => onNavigate('admin-posts')} className="w-full">
             Buka Kelola Berita
+          </Button>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-foreground">Galeri Foto</h2>
+            <Images size={24} className="text-primary" />
+          </div>
+          <p className="text-muted-foreground mb-6">
+            Upload dan kelola foto kegiatan sekolah per unit
+          </p>
+          <Button onClick={() => onNavigate('admin-gallery')} className="w-full">
+            Buka Galeri
           </Button>
         </Card>
 

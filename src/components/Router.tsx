@@ -5,11 +5,13 @@ export type RouteType =
   | 'home' 
   | 'profil' 
   | 'berita' 
-  | 'ppdb' 
+  | 'ppdb'
+  | 'galeri'
   | 'admin-login' 
   | 'admin-dashboard'
   | 'admin-posts'
   | 'admin-enrollments'
+  | 'admin-gallery'
 
 interface RouterProps {
   children: (route: RouteType, navigate: (route: RouteType) => void) => ReactNode

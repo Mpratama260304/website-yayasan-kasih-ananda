@@ -1,4 +1,4 @@
-import { House, Newspaper, Users, GraduationCap, List, SignIn } from '@phosphor-icons/react'
+import { House, Newspaper, Users, GraduationCap, List, SignIn, Images } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { RouteType } from './Router'
@@ -18,6 +18,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
     { route: 'home' as RouteType, label: 'Beranda', icon: House },
     { route: 'profil' as RouteType, label: 'Profil', icon: GraduationCap },
     { route: 'berita' as RouteType, label: 'Berita', icon: Newspaper },
+    { route: 'galeri' as RouteType, label: 'Galeri', icon: Images },
     { route: 'ppdb' as RouteType, label: 'PPDB', icon: Users },
   ]
 

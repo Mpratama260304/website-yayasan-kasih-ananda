@@ -1,4 +1,4 @@
-import { GraduationCap, Users, BookOpen, Trophy } from '@phosphor-icons/react'
+import { GraduationCap, Users, BookOpen, Trophy, Images } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { RouteType } from '@/components/Router'
@@ -135,6 +135,29 @@ export function HomePage({ onNavigate }: HomePageProps) {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="py-16 md:py-20 bg-secondary/30">
+        <div className="container mx-auto px-4 md:px-6 lg:px-8 text-center">
+          <div className="flex justify-center mb-6">
+            <Images size={48} weight="duotone" className="text-accent" />
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+            Galeri Kegiatan
+          </h2>
+          <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
+            Lihat dokumentasi kegiatan dan prestasi siswa di seluruh unit Yayasan Kasih Ananda
+          </p>
+          <Button 
+            size="lg"
+            variant="outline"
+            onClick={() => onNavigate('galeri')}
+            className="text-lg px-10 py-6 gap-2 hover:shadow-lg transition-all hover:scale-105"
+          >
+            <Images size={24} />
+            Lihat Galeri
+          </Button>
         </div>
       </section>
 

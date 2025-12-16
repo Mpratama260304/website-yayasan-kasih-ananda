@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { GraduationCap, House, Newspaper, ClipboardText, SignOut, SquaresFour } from '@phosphor-icons/react'
+import { GraduationCap, House, Newspaper, ClipboardText, SignOut, SquaresFour, Images } from '@phosphor-icons/react'
 import { RouteType } from './Router'
 import { toast } from 'sonner'
 
@@ -23,6 +23,7 @@ export function AdminLayout({ children, currentRoute, onNavigate }: AdminLayoutP
   const navItems = [
     { route: 'admin-dashboard' as RouteType, label: 'Dashboard', icon: SquaresFour },
     { route: 'admin-posts' as RouteType, label: 'Berita', icon: Newspaper },
+    { route: 'admin-gallery' as RouteType, label: 'Galeri', icon: Images },
     { route: 'admin-enrollments' as RouteType, label: 'Pendaftaran', icon: ClipboardText },
   ]
 
@@ -53,12 +54,12 @@ export function AdminLayout({ children, currentRoute, onNavigate }: AdminLayoutP
               <div className="hidden sm:flex items-center gap-2 px-3">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                   <span className="text-sm font-semibold text-primary">
-                    {session?.name?.[0]?.toUpperCase() || 'A'}
+                    {session?.user?.name?.[0]?.toUpperCase() || 'A'}
                   </span>
                 </div>
                 <div className="text-sm">
-                  <p className="font-medium text-foreground">{session?.name}</p>
-                  <p className="text-xs text-muted-foreground">{session?.role}</p>
+                  <p className="font-medium text-foreground">{session?.user?.name}</p>
+                  <p className="text-xs text-muted-foreground">{session?.user?.role}</p>
                 </div>
               </div>
               <Button

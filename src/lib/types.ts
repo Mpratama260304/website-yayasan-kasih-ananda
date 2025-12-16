@@ -21,17 +21,40 @@ export interface Enrollment {
   fullName: string
   nik: string
   birthDate: string
-  unit: 'SD' | 'SMP' | 'SMK'
+  unit: string
   parentName: string
   phone: string
   address: string
-  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  status: string
   createdAt: string
 }
 
 export interface AuthSession {
-  userId: string
-  username: string
+  user: {
+    id: string
+    username: string
+    name: string
+    role: string
+  }
+  token: string
+  expiresAt: string
+}
+
+export type UnitType = 'SD' | 'SMP' | 'SMK' | 'YAYASAN'
+
+export interface GalleryPhoto {
+  id: string
+  title: string
+  description: string
+  imageData: string
+  unit: UnitType
+  category: string
+  uploadedAt: string
+  uploadedBy: string
+}
+
+export interface GalleryCategory {
+  id: string
   name: string
-  role: string
+  unit: UnitType
 }

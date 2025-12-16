@@ -7,10 +7,12 @@ import { AdminLayout } from '@/components/AdminLayout'
 import { HomePage } from '@/pages/HomePage'
 import { ProfilPage } from '@/pages/ProfilPage'
 import { BeritaPage } from '@/pages/BeritaPage'
+import { GaleriPage } from '@/pages/GaleriPage'
 import { PPDBPage } from '@/pages/PPDBPage'
 import { LoginPage } from '@/pages/admin/LoginPage'
 import { DashboardPage } from '@/pages/admin/DashboardPage'
 import { PostsPage } from '@/pages/admin/PostsPage'
+import { GalleryPage } from '@/pages/admin/GalleryPage'
 import { EnrollmentsPage } from '@/pages/admin/EnrollmentsPage'
 import { useEffect } from 'react'
 
@@ -38,6 +40,7 @@ function RouteHandler({ route, navigate }: { route: RouteType; navigate: (r: Rou
       <AdminLayout currentRoute={route} onNavigate={navigate}>
         {route === 'admin-dashboard' && <DashboardPage onNavigate={navigate} />}
         {route === 'admin-posts' && <PostsPage />}
+        {route === 'admin-gallery' && <GalleryPage />}
         {route === 'admin-enrollments' && <EnrollmentsPage />}
       </AdminLayout>
     )
@@ -50,6 +53,7 @@ function RouteHandler({ route, navigate }: { route: RouteType; navigate: (r: Rou
         {route === 'home' && <HomePage onNavigate={navigate} />}
         {route === 'profil' && <ProfilPage />}
         {route === 'berita' && <BeritaPage />}
+        {route === 'galeri' && <GaleriPage />}
         {route === 'ppdb' && <PPDBPage />}
       </main>
       <Footer />

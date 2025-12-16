@@ -75,7 +75,7 @@ export function PostsPage() {
         title: formData.title,
         content: formData.content,
         published: formData.published,
-        authorId: session?.userId || '',
+        authorId: session?.user?.id || '',
         createdAt: new Date().toISOString(),
       }
       setPosts((current) => [...(current || []), newPost])
