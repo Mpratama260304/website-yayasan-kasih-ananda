@@ -1,18 +1,23 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════
+ * AUTH CONTEXT - Server-side session management
+ * ═══════════════════════════════════════════════════════════════════
+ * 
+ * This replaces the localStorage-based auth with server-side sessions
+ * 
+ * ❌ NO localStorage for data
+ * ❌ NO client-side password storage
+ * ✅ Server-side sessions
+ * ✅ HTTP-only cookies
+ * ✅ API-based authentication
+ * ═══════════════════════════════════════════════════════════════════
+ */
+
 import { createContext, useContext, ReactNode, useState, useEffect } from 'react'
-import { AuthSession, User } from '@/lib/types'
-import { 
-  verifyPassword, 
-  createSession, 
-  validateSession,
-  destroySession,
-  getSessionIdFromStorage,
-  setSessionIdToStorage,
-  clearSessionIdFromStorage,
-  initializeDefaultUser
-} from '@/lib/auth'
+import { authApi, User, getAuthToken, clearAuthToken } from '@/lib/api'
 
 interface AuthContextType {
-  session: AuthSession | null
+  user: User | null
   login: (username: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
   isAuthenticated: boolean
@@ -22,7 +27,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<AuthSession | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -32,20 +37,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const initializeAuth = async () => {
     setIsLoading(true)
     try {
-      await initializeDefaultUser()
-      
-      const sessionId = getSessionIdFromStorage()
-      if (sessionId) {
-        const validSession = await validateSession(sessionId)
-        if (validSession) {
-          setSession(validSession)
+      // Check if we have an existing session
+      const token = getAuthToken()
+      if (token) {
+        const currentUser = await authApi.getCurrentUser()
+        if (currentUser) {
+          setUser(currentUser)
         } else {
-          clearSessionIdFromStorage()
+          clearAuthToken()
         }
       }
     } catch (error) {
       console.error('Failed to initialize auth:', error)
-      clearSessionIdFromStorage()
+      clearAuthToken()
     } finally {
       setIsLoading(false)
     }
@@ -53,47 +57,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      const users = await window.spark.kv.get<User[]>('users') || []
-      const user = users.find(u => u.username === username)
+      console.log('🔍 Login attempt for:', username)
       
-      if (!user) {
-        return false
-      }
-
-      const isValid = await verifyPassword(password, user.password)
+      const result = await authApi.login(username, password)
       
-      if (isValid) {
-        const newSession = await createSession(user)
-        setSession(newSession)
-        setSessionIdToStorage(newSession.sessionId)
+      if (result.user) {
+        setUser(result.user)
+        console.log('✅ Login successful!')
         return true
       }
       
       return false
     } catch (error) {
-      console.error('Login error:', error)
+      console.error('❌ Login error:', error)
       return false
     }
   }
 
   const logout = async () => {
     try {
-      if (session) {
-        await destroySession(session.sessionId)
-      }
-      setSession(null)
-      clearSessionIdFromStorage()
+      await authApi.logout()
     } catch (error) {
       console.error('Logout error:', error)
+    } finally {
+      setUser(null)
+      clearAuthToken()
     }
   }
 
   return (
     <AuthContext.Provider value={{
-      session,
+      user,
       login,
       logout,
-      isAuthenticated: session !== null,
+      isAuthenticated: user !== null,
       isLoading
     }}>
       {children}
@@ -107,4 +104,11 @@ export function useAuth() {
     throw new Error('useAuth must be used within AuthProvider')
   }
   return context
+}
+
+// Legacy compatibility - session type that pages might expect
+export interface AuthSession {
+  sessionId: string
+  user: User
+  expiresAt: string
 }

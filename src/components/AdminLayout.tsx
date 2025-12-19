@@ -1,9 +1,10 @@
 import { ReactNode } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { GraduationCap, House, Newspaper, ClipboardText, SignOut, SquaresFour, Images } from '@phosphor-icons/react'
+import { GraduationCap, House, Newspaper, ClipboardText, SignOut, SquaresFour, Images, EnvelopeSimple, Gear, Image, User } from '@phosphor-icons/react'
 import { RouteType } from './Router'
 import { toast } from 'sonner'
+import { Separator } from '@/components/ui/separator'
 
 interface AdminLayoutProps {
   children: ReactNode
@@ -20,11 +21,18 @@ export function AdminLayout({ children, currentRoute, onNavigate }: AdminLayoutP
     onNavigate('home')
   }
 
-  const navItems = [
+  const mainNavItems = [
     { route: 'admin-dashboard' as RouteType, label: 'Dashboard', icon: SquaresFour },
     { route: 'admin-posts' as RouteType, label: 'Berita', icon: Newspaper },
+    { route: 'admin-media' as RouteType, label: 'Media', icon: Image },
     { route: 'admin-gallery' as RouteType, label: 'Galeri', icon: Images },
     { route: 'admin-enrollments' as RouteType, label: 'Pendaftaran', icon: ClipboardText },
+    { route: 'admin-messages' as RouteType, label: 'Pesan Masuk', icon: EnvelopeSimple },
+  ]
+
+  const settingsNavItems = [
+    { route: 'admin-settings' as RouteType, label: 'Pengaturan', icon: Gear },
+    { route: 'admin-profile' as RouteType, label: 'Profil', icon: User },
   ]
 
   return (
@@ -79,8 +87,25 @@ export function AdminLayout({ children, currentRoute, onNavigate }: AdminLayoutP
       <div className="container mx-auto px-4 md:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           <aside className="lg:w-64 flex-shrink-0">
-            <div className="sticky top-24 space-y-2">
-              {navItems.map(({ route, label, icon: Icon }) => (
+            <div className="sticky top-24 space-y-1">
+              {/* Main Navigation */}
+              {mainNavItems.map(({ route, label, icon: Icon }) => (
+                <Button
+                  key={route}
+                  variant={currentRoute === route ? 'default' : 'ghost'}
+                  onClick={() => onNavigate(route)}
+                  className="w-full justify-start gap-3"
+                >
+                  <Icon size={20} />
+                  {label}
+                </Button>
+              ))}
+
+              <Separator className="my-4" />
+
+              {/* Settings Navigation */}
+              <p className="text-xs font-medium text-muted-foreground px-3 py-2">PENGATURAN</p>
+              {settingsNavItems.map(({ route, label, icon: Icon }) => (
                 <Button
                   key={route}
                   variant={currentRoute === route ? 'default' : 'ghost'}

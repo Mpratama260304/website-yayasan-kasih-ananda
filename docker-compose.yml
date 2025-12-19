@@ -1,0 +1,107 @@
+# ═══════════════════════════════════════════════════════════════════
+# DOCKER-COMPOSE - PostgreSQL Backend
+# ═══════════════════════════════════════════════════════════════════
+#
+# FULL BACKEND REBUILD - NO localStorage, NO client-side persistence
+# All data stored in PostgreSQL database
+#
+# ✅ PostgreSQL database
+# ✅ Persistent volumes for database and uploads
+# ✅ PhalaCloud ready
+# ✅ Single source of truth
+#
+# ❌ NO .env file required - all config is in this file
+#
+# Deploy:
+#   1. docker-compose up -d
+#   2. Data persists across restarts
+# ═══════════════════════════════════════════════════════════════════
+
+services:
+  # ─────────────────────────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: yayasan-kasi-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: yayasan_kasi_2024
+      POSTGRES_DB: yayasan_kasi
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d yayasan_kasi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - yayasan-network
+
+  # ─────────────────────────────────────────────────────────────────
+  # Application Server
+  # ─────────────────────────────────────────────────────────────────
+  yayasan-kasih-ananda:
+    # Pull from Docker Hub (PhalaCloud compatible)
+    image: mpratamamail/yayasan-kasih-ananda:latest
+    container_name: yayasan-kasih-ananda
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    
+    ports:
+      - "3000:3000"
+    
+    environment:
+      # Server configuration
+      PORT: "3000"
+      NODE_ENV: "production"
+      
+      # Database connection (PostgreSQL)
+      DATABASE_URL: "postgresql://postgres:yayasan_kasi_2024@postgres:5432/yayasan_kasi?schema=public"
+      
+      # Upload limits (in bytes)
+      MAX_FILE_SIZE: "52428800"
+      IMAGE_QUALITY: "85"
+      MAX_IMAGE_WIDTH: "1920"
+      MAX_IMAGE_HEIGHT: "1080"
+    
+    volumes:
+      - uploads_data:/app/uploads
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    networks:
+      - yayasan-network
+
+# ─────────────────────────────────────────────────────────────────
+# Volumes
+# ─────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+# ─────────────────────────────────────────────────────────────────
+# Networks
+# ─────────────────────────────────────────────────────────────────
+networks:
+  yayasan-network:
+    driver: bridge

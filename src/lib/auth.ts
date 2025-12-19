@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { AuthSession, User } from './types'
+import { getDatabase } from './db'
 
 const SESSION_DURATION_HOURS = 24
 const BCRYPT_ROUNDS = 10
@@ -38,7 +39,9 @@ export async function createSession(user: User): Promise<AuthSession> {
     createdAt: new Date().toISOString()
   }
 
-  await window.spark.kv.set(`session:${sessionId}`, session)
+  const db = getDatabase()
+  await db.set(`session:${sessionId}`, session)
+  console.log('✅ Session created:', sessionId)
   
   return session
 }
@@ -46,7 +49,8 @@ export async function createSession(user: User): Promise<AuthSession> {
 export async function validateSession(sessionId: string): Promise<AuthSession | null> {
   if (!sessionId) return null
   
-  const session = await window.spark.kv.get<AuthSession>(`session:${sessionId}`)
+  const db = getDatabase()
+  const session = await db.get<AuthSession>(`session:${sessionId}`)
   
   if (!session) return null
   
@@ -62,11 +66,15 @@ export async function validateSession(sessionId: string): Promise<AuthSession | 
 }
 
 export async function destroySession(sessionId: string): Promise<void> {
-  await window.spark.kv.delete(`session:${sessionId}`)
+  const db = getDatabase()
+  await db.delete(`session:${sessionId}`)
 }
 
 export async function initializeDefaultUser(): Promise<void> {
-  const users = await window.spark.kv.get<User[]>('users') || []
+  const db = getDatabase()
+  const users = await db.getUsers() || []
+  
+  console.log('📊 Initializing users... Current users:', users.length)
   
   if (users.length === 0) {
     const hashedPassword = await hashPassword('admin123')
@@ -79,7 +87,13 @@ export async function initializeDefaultUser(): Promise<void> {
       createdAt: new Date().toISOString()
     }
     
-    await window.spark.kv.set('users', [defaultUser])
+    await db.saveUsers([defaultUser])
+    console.log('✅ Admin user initialized')
+    console.log('Username: admin')
+    console.log('Password: admin123')
+    console.log('Stored user:', { username: defaultUser.username, role: defaultUser.role })
+  } else {
+    console.log('✅ Users already exist:', users.map(u => u.username))
   }
 }
 

@@ -1,6 +1,7 @@
-import { useKV } from '@github/spark/hooks'
-import { GalleryPhoto, UnitType, GalleryCategory, GalleryAlbum } from '@/lib/types'
+import { useEffect } from 'react'
+import { GalleryPhoto, UnitType, GalleryCategory, GalleryAlbum } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import { galleryApi } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,12 +13,13 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useState, useRef } from 'react'
-import { Plus, Trash, Pencil, Image as ImageIcon, Folder, Tag, Calendar, FolderOpen, Heart, ChatCircle, Images, X } from '@phosphor-icons/react'
+import { Plus, Trash, Pencil, Image as ImageIcon, Folder, Tag, Calendar, FolderOpen, Heart, ChatCircle, Images, X, CloudArrowUp, Warning, Spinner } from '@phosphor-icons/react'
 import { toast } from 'sonner'
-import { generateId } from '@/lib/auth'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import { uploadFile, uploadMultipleFiles, deleteFile as deleteFileFromServer, checkUploadServer, isBase64, getFileUrl } from '@/lib/upload'
 
 interface PhotoFormData {
   title: string
@@ -43,22 +45,11 @@ interface ImagePreview {
 }
 
 export function GalleryPage() {
-  const { session } = useAuth()
-  const [photos, setPhotos] = useKV<GalleryPhoto[]>('gallery-photos', [])
-  const [albums, setAlbums] = useKV<GalleryAlbum[]>('gallery-albums', [])
-  const [categories, setCategories] = useKV<GalleryCategory[]>('gallery-categories', [
-    { id: '1', name: 'Kegiatan Belajar', unit: 'SD' },
-    { id: '2', name: 'Olahraga', unit: 'SD' },
-    { id: '3', name: 'Ekstrakurikuler', unit: 'SD' },
-    { id: '4', name: 'Kegiatan Belajar', unit: 'SMP' },
-    { id: '5', name: 'Olahraga', unit: 'SMP' },
-    { id: '6', name: 'Ekstrakurikuler', unit: 'SMP' },
-    { id: '7', name: 'Praktik Kerja', unit: 'SMK' },
-    { id: '8', name: 'Kegiatan Belajar', unit: 'SMK' },
-    { id: '9', name: 'Olahraga', unit: 'SMK' },
-    { id: '10', name: 'Upacara & Peringatan', unit: 'YAYASAN' },
-    { id: '11', name: 'Acara Yayasan', unit: 'YAYASAN' },
-  ])
+  const { user } = useAuth()
+  const [photos, setPhotos] = useState<GalleryPhoto[]>([])
+  const [albums, setAlbums] = useState<GalleryAlbum[]>([])
+  const [categories, setCategories] = useState<GalleryCategory[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
@@ -72,6 +63,9 @@ export function GalleryPage() {
   const [imagePreviews, setImagePreviews] = useState<ImagePreview[]>([])
   const [activeTab, setActiveTab] = useState<'photos' | 'albums'>('photos')
   const [isMultipleUpload, setIsMultipleUpload] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null)
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [formData, setFormData] = useState<PhotoFormData>({
@@ -91,6 +85,75 @@ export function GalleryPage() {
 
   const [newCategory, setNewCategory] = useState({ name: '', unit: 'SD' as UnitType })
 
+  // Load data from database on mount
+  useEffect(() => {
+    loadGalleryData()
+  }, [])
+
+  // Check upload server status
+  useEffect(() => {
+    const checkServer = async () => {
+      const online = await checkUploadServer()
+      setServerOnline(online)
+    }
+    checkServer()
+  }, [])
+
+  // Helper to get display URL
+  const getPhotoUrl = (photo: GalleryPhoto) => {
+    if (photo.fileUrl) {
+      if (isBase64(photo.fileUrl)) {
+        return photo.fileUrl // Legacy base64
+      }
+      return getFileUrl(photo.fileUrl)
+    }
+    return ''
+  }
+
+  const loadGalleryData = async () => {
+    try {
+      setIsLoading(true)
+      const [allPhotos, allAlbums, allCategories] = await Promise.all([
+        galleryApi.getPhotos(),
+        galleryApi.getAlbums(),
+        galleryApi.getCategories()
+      ])
+      
+      setPhotos(allPhotos || [])
+      setAlbums(allAlbums || [])
+      
+      // If no categories in database, use defaults and save them
+      if (!allCategories || allCategories.length === 0) {
+        const defaultCategoriesData = [
+          { name: 'Kegiatan Belajar', unit: 'SD' as UnitType },
+          { name: 'Olahraga', unit: 'SD' as UnitType },
+          { name: 'Ekstrakurikuler', unit: 'SD' as UnitType },
+          { name: 'Kegiatan Belajar', unit: 'SMP' as UnitType },
+          { name: 'Olahraga', unit: 'SMP' as UnitType },
+          { name: 'Ekstrakurikuler', unit: 'SMP' as UnitType },
+          { name: 'Praktik Kerja', unit: 'SMK' as UnitType },
+          { name: 'Kegiatan Belajar', unit: 'SMK' as UnitType },
+          { name: 'Olahraga', unit: 'SMK' as UnitType },
+          { name: 'Upacara & Peringatan', unit: 'YAYASAN' as UnitType },
+          { name: 'Acara Yayasan', unit: 'YAYASAN' as UnitType },
+        ]
+        const defaultCategories = await Promise.all(
+          defaultCategoriesData.map(cat => galleryApi.createCategory(cat))
+        )
+        setCategories(defaultCategories)
+      } else {
+        setCategories(allCategories)
+      }
+      
+      console.log('✅ Gallery data loaded:', allPhotos.length, 'photos')
+    } catch (error) {
+      console.error('❌ Error loading gallery data:', error)
+      toast.error('Gagal memuat data galeri')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const units: UnitType[] = ['SD', 'SMP', 'SMK', 'YAYASAN']
   const unitOptions = [
     { value: 'ALL', label: 'Semua Unit' },
@@ -105,7 +168,7 @@ export function GalleryPage() {
     : (photos || []).filter(photo => photo.unit === selectedUnit)
 
   const sortedPhotos = filteredPhotos.sort((a, b) => 
-    new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
   const getCategoriesForUnit = (unit: UnitType) => {
@@ -116,16 +179,26 @@ export function GalleryPage() {
     return (albums || []).filter(album => album.unit === unit)
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
+
+    // Check server status
+    if (!serverOnline) {
+      toast.error('Server upload tidak tersedia. Jalankan: npm run server')
+      return
+    }
 
     if (isMultipleUpload) {
       const validFiles: File[] = []
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
-        if (file.size > 5 * 1024 * 1024) {
-          toast.error(`File ${file.name} melebihi 5MB dan dilewati`)
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`File ${file.name} melebihi 10MB dan dilewati`)
+          continue
+        }
+        if (!file.type.startsWith('image/')) {
+          toast.error(`File ${file.name} bukan gambar`)
           continue
         }
         validFiles.push(file)
@@ -136,40 +209,73 @@ export function GalleryPage() {
         return
       }
 
-      const newPreviews: ImagePreview[] = []
-      let processedCount = 0
-
-      validFiles.forEach((file) => {
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          newPreviews.push({
-            id: generateId(),
-            dataUrl: reader.result as string,
-            file,
-            title: file.name.replace(/\.[^/.]+$/, ''),
-            description: ''
-          })
-          processedCount++
-
-          if (processedCount === validFiles.length) {
-            setImagePreviews(prev => [...prev, ...newPreviews])
-            toast.success(`${validFiles.length} foto siap diupload`)
-          }
+      setIsUploading(true)
+      try {
+        // Upload all files to server
+        const result = await uploadMultipleFiles(validFiles)
+        
+        if (result.successful.length === 0) {
+          toast.error('Semua file gagal diupload')
+          return
         }
-        reader.readAsDataURL(file)
-      })
+
+        const newPreviews: ImagePreview[] = result.successful.map((r, idx) => ({
+          id: crypto.randomUUID(),
+          dataUrl: getFileUrl(r.url || ''), // Use URL for display
+          file: validFiles[idx],
+          title: validFiles[idx].name.replace(/\.[^/.]+$/, ''),
+          description: '',
+          uploadedUrl: r.url // Store the uploaded URL
+        }))
+
+        setImagePreviews(prev => [...prev, ...newPreviews])
+        toast.success(`${result.successful.length} foto berhasil diupload ke server`)
+        
+        if (result.failed.length > 0) {
+          toast.error(`${result.failed.length} file gagal diupload`)
+        }
+      } catch (error) {
+        console.error('Upload error:', error)
+        toast.error('Gagal mengupload file')
+      } finally {
+        setIsUploading(false)
+      }
     } else {
       const file = files[0]
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Ukuran file maksimal 5MB')
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Ukuran file maksimal 10MB')
         return
       }
 
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
+      if (!file.type.startsWith('image/')) {
+        toast.error('File harus berupa gambar')
+        return
       }
-      reader.readAsDataURL(file)
+
+      setIsUploading(true)
+      try {
+        // Create preview immediately
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          setImagePreview(reader.result as string)
+        }
+        reader.readAsDataURL(file)
+
+        // Upload to server
+        const result = await uploadFile(file)
+        if (result.success && result.url) {
+          setUploadedImageUrl(result.url) // Store the URL
+          toast.success('Gambar berhasil diupload ke server')
+        } else {
+          throw new Error(result.error || 'Upload failed')
+        }
+      } catch (error) {
+        console.error('Upload error:', error)
+        toast.error('Gagal mengupload gambar')
+        setImagePreview('')
+      } finally {
+        setIsUploading(false)
+      }
     }
   }
 
@@ -180,12 +286,13 @@ export function GalleryPage() {
       setEditingPhoto(photo)
       setFormData({
         title: photo.title,
-        description: photo.description,
+        description: photo.description || '',
         unit: photo.unit,
-        category: photo.category,
+        category: '', // Categories not linked to photos in new schema
         albumId: photo.albumId || '',
       })
-      setImagePreview(photo.imageData)
+      setImagePreview(getPhotoUrl(photo))
+      setUploadedImageUrl(photo.fileUrl || '')
       setImagePreviews([])
     } else {
       setEditingPhoto(null)
@@ -197,6 +304,7 @@ export function GalleryPage() {
         albumId: '',
       })
       setImagePreview('')
+      setUploadedImageUrl('')
       setImagePreviews([])
     }
     setIsDialogOpen(true)
@@ -206,6 +314,7 @@ export function GalleryPage() {
     setIsDialogOpen(false)
     setEditingPhoto(null)
     setIsMultipleUpload(false)
+    setIsUploading(false)
     setFormData({
       title: '',
       description: '',
@@ -214,128 +323,141 @@ export function GalleryPage() {
       albumId: '',
     })
     setImagePreview('')
+    setUploadedImageUrl('')
     setImagePreviews([])
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (isMultipleUpload) {
-      if (imagePreviews.length === 0) {
-        toast.error('Minimal pilih 1 foto untuk diupload')
-        return
-      }
+    try {
+      if (isMultipleUpload) {
+        if (imagePreviews.length === 0) {
+          toast.error('Minimal pilih 1 foto untuk diupload')
+          return
+        }
 
-      if (!formData.category) {
-        toast.error('Kategori harus dipilih')
-        return
-      }
+        // Create photos via API
+        const photoDataArray = imagePreviews.map(preview => ({
+          title: preview.title || 'Untitled',
+          description: preview.description,
+          fileUrl: (preview as any).uploadedUrl || preview.dataUrl,
+          unit: formData.unit,
+          albumId: formData.albumId || undefined,
+        }))
 
-      const newPhotos: GalleryPhoto[] = imagePreviews.map(preview => ({
-        id: preview.id,
-        title: preview.title || 'Untitled',
-        description: preview.description,
-        imageData: preview.dataUrl,
-        unit: formData.unit,
-        category: formData.category,
-        albumId: formData.albumId,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: session?.user?.name || 'Admin',
-        likes: [],
-        comments: [],
-      }))
-
-      setPhotos((current) => [...(current || []), ...newPhotos])
-      toast.success(`${newPhotos.length} foto berhasil ditambahkan`)
-      handleCloseDialog()
-      return
-    }
-
-    if (!formData.title.trim()) {
-      toast.error('Judul foto harus diisi')
-      return
-    }
-
-    if (!formData.category) {
-      toast.error('Kategori harus dipilih')
-      return
-    }
-
-    if (!imagePreview && !editingPhoto) {
-      toast.error('Foto harus diupload')
-      return
-    }
-
-    if (editingPhoto) {
-      setPhotos((current) =>
-        (current || []).map(photo =>
-          photo.id === editingPhoto.id
-            ? {
-                ...photo,
-                title: formData.title,
-                description: formData.description,
-                unit: formData.unit,
-                category: formData.category,
-                albumId: formData.albumId,
-                imageData: imagePreview || photo.imageData,
-              }
-            : photo
+        const newPhotos = await Promise.all(
+          photoDataArray.map(photoData => galleryApi.createPhoto(photoData))
         )
-      )
-      toast.success('Foto berhasil diupdate')
-    } else {
-      const newPhoto: GalleryPhoto = {
-        id: generateId(),
-        title: formData.title,
-        description: formData.description,
-        imageData: imagePreview,
-        unit: formData.unit,
-        category: formData.category,
-        albumId: formData.albumId,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: session?.user?.name || 'Admin',
-        likes: [],
-        comments: [],
+        
+        setPhotos([...photos, ...newPhotos])
+        toast.success(`${newPhotos.length} foto berhasil ditambahkan`)
+        handleCloseDialog()
+        return
       }
-      setPhotos((current) => [...(current || []), newPhoto])
-      toast.success('Foto berhasil ditambahkan')
-    }
 
-    handleCloseDialog()
+      if (!formData.title.trim()) {
+        toast.error('Judul foto harus diisi')
+        return
+      }
+
+      if (!uploadedImageUrl && !editingPhoto) {
+        toast.error('Foto harus diupload')
+        return
+      }
+
+      if (editingPhoto) {
+        const photoData = {
+          title: formData.title,
+          description: formData.description,
+          unit: formData.unit,
+          albumId: formData.albumId || undefined,
+          ...(uploadedImageUrl && { fileUrl: uploadedImageUrl }),
+        }
+        const updatedPhoto = await galleryApi.updatePhoto(editingPhoto.id, photoData)
+        setPhotos(photos.map(p => p.id === editingPhoto.id ? updatedPhoto : p))
+        toast.success('Foto berhasil diupdate')
+      } else {
+        const photoData = {
+          title: formData.title,
+          description: formData.description,
+          fileUrl: uploadedImageUrl,
+          unit: formData.unit,
+          albumId: formData.albumId || undefined,
+        }
+        const newPhoto = await galleryApi.createPhoto(photoData)
+        setPhotos([...photos, newPhoto])
+        toast.success('Foto berhasil ditambahkan')
+      }
+
+      handleCloseDialog()
+    } catch (error) {
+      console.error('❌ Error saving photo:', error)
+      toast.error('Gagal menyimpan foto')
+    }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deletePhoto) {
-      setPhotos((current) => (current || []).filter(photo => photo.id !== deletePhoto.id))
-      toast.success('Foto berhasil dihapus')
-      setDeletePhoto(null)
+      try {
+        // Delete from server if it's a URL (not base64)
+        const imageUrl = deletePhoto.fileUrl
+        if (imageUrl && !isBase64(imageUrl)) {
+          try {
+            await deleteFileFromServer(imageUrl)
+          } catch (e) {
+            console.warn('Could not delete file from server:', e)
+          }
+        }
+        
+        await galleryApi.deletePhoto(deletePhoto.id)
+        setPhotos(photos.filter(photo => photo.id !== deletePhoto.id))
+        toast.success('Foto berhasil dihapus')
+        console.log('✅ Photo deleted:', deletePhoto.id)
+      } catch (error) {
+        console.error('❌ Error deleting photo:', error)
+        toast.error('Gagal menghapus foto')
+      } finally {
+        setDeletePhoto(null)
+      }
     }
   }
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (!newCategory.name.trim()) {
       toast.error('Nama kategori harus diisi')
       return
     }
 
-    const category: GalleryCategory = {
-      id: generateId(),
-      name: newCategory.name,
-      unit: newCategory.unit,
-    }
+    try {
+      const categoryData = {
+        name: newCategory.name,
+        unit: newCategory.unit,
+      }
 
-    setCategories((current) => [...(current || []), category])
-    toast.success('Kategori berhasil ditambahkan')
-    setNewCategory({ name: '', unit: 'SD' })
-    setIsCategoryDialogOpen(false)
+      const newCat = await galleryApi.createCategory(categoryData)
+      setCategories([...categories, newCat])
+      toast.success('Kategori berhasil ditambahkan')
+      setNewCategory({ name: '', unit: 'SD' })
+      setIsCategoryDialogOpen(false)
+    } catch (error) {
+      console.error('❌ Error adding category:', error)
+      toast.error('Gagal menambah kategori')
+    }
   }
 
-  const handleDeleteCategory = (categoryId: string) => {
-    setCategories((current) => (current || []).filter(cat => cat.id !== categoryId))
-    toast.success('Kategori berhasil dihapus')
+  const handleDeleteCategory = async (categoryId: string) => {
+    try {
+      await galleryApi.deleteCategory(categoryId)
+      setCategories((current) => (current || []).filter(cat => cat.id !== categoryId))
+      toast.success('Kategori berhasil dihapus')
+    } catch (error) {
+      console.error('Error deleting category:', error)
+      toast.error('Gagal menghapus kategori')
+    }
   }
 
   const handleOpenAlbumDialog = (album?: GalleryAlbum) => {
@@ -343,7 +465,7 @@ export function GalleryPage() {
       setEditingAlbum(album)
       setAlbumFormData({
         name: album.name,
-        description: album.description,
+        description: album.description || '',
         unit: album.unit,
         eventDate: album.eventDate || '',
       })
@@ -370,7 +492,7 @@ export function GalleryPage() {
     })
   }
 
-  const handleSubmitAlbum = (e: React.FormEvent) => {
+  const handleSubmitAlbum = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!albumFormData.name.trim()) {
@@ -378,47 +500,55 @@ export function GalleryPage() {
       return
     }
 
-    if (editingAlbum) {
-      setAlbums((current) =>
-        (current || []).map(album =>
-          album.id === editingAlbum.id
-            ? {
-                ...album,
-                name: albumFormData.name,
-                description: albumFormData.description,
-                unit: albumFormData.unit,
-                eventDate: albumFormData.eventDate,
-              }
-            : album
+    try {
+      if (editingAlbum) {
+        const albumData = {
+          name: albumFormData.name,
+          description: albumFormData.description || undefined,
+          unit: albumFormData.unit,
+          eventDate: albumFormData.eventDate || undefined,
+        }
+        const updatedAlbum = await galleryApi.updateAlbum(editingAlbum.id, albumData)
+        setAlbums((current) =>
+          (current || []).map(album =>
+            album.id === editingAlbum.id ? updatedAlbum : album
+          )
         )
-      )
-      toast.success('Album berhasil diupdate')
-    } else {
-      const newAlbum: GalleryAlbum = {
-        id: generateId(),
-        name: albumFormData.name,
-        description: albumFormData.description,
-        unit: albumFormData.unit,
-        eventDate: albumFormData.eventDate,
-        createdAt: new Date().toISOString(),
+        toast.success('Album berhasil diupdate')
+      } else {
+        const albumData = {
+          name: albumFormData.name,
+          description: albumFormData.description || undefined,
+          unit: albumFormData.unit,
+          eventDate: albumFormData.eventDate || undefined,
+        }
+        const newAlbum = await galleryApi.createAlbum(albumData)
+        setAlbums((current) => [...(current || []), newAlbum])
+        toast.success('Album berhasil ditambahkan')
       }
-      setAlbums((current) => [...(current || []), newAlbum])
-      toast.success('Album berhasil ditambahkan')
-    }
 
-    handleCloseAlbumDialog()
+      handleCloseAlbumDialog()
+    } catch (error) {
+      console.error('Error saving album:', error)
+      toast.error('Gagal menyimpan album')
+    }
   }
 
-  const handleDeleteAlbum = () => {
+  const handleDeleteAlbum = async () => {
     if (deleteAlbum) {
-      setAlbums((current) => (current || []).filter(album => album.id !== deleteAlbum.id))
-      setPhotos((current) =>
-        (current || []).map(photo =>
-          photo.albumId === deleteAlbum.id ? { ...photo, albumId: undefined } : photo
-        )
-      )
-      toast.success('Album berhasil dihapus')
-      setDeleteAlbum(null)
+      try {
+        await galleryApi.deleteAlbum(deleteAlbum.id)
+        setAlbums((current) => (current || []).filter(album => album.id !== deleteAlbum.id))
+        // Note: Backend should handle removing albumId from photos
+        // Reload photos to get updated data
+        const updatedPhotos = await galleryApi.getPhotos()
+        setPhotos(updatedPhotos)
+        toast.success('Album berhasil dihapus')
+        setDeleteAlbum(null)
+      } catch (error) {
+        console.error('Error deleting album:', error)
+        toast.error('Gagal menghapus album')
+      }
     }
   }
 
@@ -605,9 +735,13 @@ export function GalleryPage() {
                           <SelectValue placeholder="Pilih kategori" />
                         </SelectTrigger>
                         <SelectContent>
-                          {getCategoriesForUnit(formData.unit).map(cat => (
-                            <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
-                          ))}
+                          {getCategoriesForUnit(formData.unit).length > 0 ? (
+                            getCategoriesForUnit(formData.unit).map(cat => (
+                              <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="_disabled" disabled>Tidak ada kategori untuk unit ini</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -615,17 +749,21 @@ export function GalleryPage() {
                     <div className="space-y-2">
                       <Label htmlFor="album">Album (Opsional)</Label>
                       <Select
-                        value={formData.albumId}
-                        onValueChange={(value) => setFormData({ ...formData, albumId: value })}
+                        value={formData.albumId || 'no-album'}
+                        onValueChange={(value) => setFormData({ ...formData, albumId: value === 'no-album' ? '' : value })}
                       >
                         <SelectTrigger id="album">
                           <SelectValue placeholder="Pilih album (opsional)" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Tanpa Album</SelectItem>
-                          {getAlbumsForUnit(formData.unit).map(album => (
-                            <SelectItem key={album.id} value={album.id}>{album.name}</SelectItem>
-                          ))}
+                          <SelectItem value="no-album">Tanpa Album</SelectItem>
+                          {getAlbumsForUnit(formData.unit).length > 0 ? (
+                            getAlbumsForUnit(formData.unit).map(album => (
+                              <SelectItem key={album.id} value={album.id}>{album.name}</SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="_disabled" disabled>Tidak ada album untuk unit ini</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -738,9 +876,13 @@ export function GalleryPage() {
                           <SelectValue placeholder="Pilih kategori" />
                         </SelectTrigger>
                         <SelectContent>
-                          {getCategoriesForUnit(formData.unit).map(cat => (
-                            <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
-                          ))}
+                          {getCategoriesForUnit(formData.unit).length > 0 ? (
+                            getCategoriesForUnit(formData.unit).map(cat => (
+                              <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="_disabled" disabled>Tidak ada kategori untuk unit ini</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -748,17 +890,21 @@ export function GalleryPage() {
                     <div className="space-y-2">
                       <Label htmlFor="album">Album (Opsional)</Label>
                       <Select
-                        value={formData.albumId}
-                        onValueChange={(value) => setFormData({ ...formData, albumId: value })}
+                        value={formData.albumId || 'no-album'}
+                        onValueChange={(value) => setFormData({ ...formData, albumId: value === 'no-album' ? '' : value })}
                       >
                         <SelectTrigger id="album">
                           <SelectValue placeholder="Pilih album (opsional)" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Tanpa Album</SelectItem>
-                          {getAlbumsForUnit(formData.unit).map(album => (
-                            <SelectItem key={album.id} value={album.id}>{album.name}</SelectItem>
-                          ))}
+                          <SelectItem value="no-album">Tanpa Album</SelectItem>
+                          {getAlbumsForUnit(formData.unit).length > 0 ? (
+                            getAlbumsForUnit(formData.unit).map(album => (
+                              <SelectItem key={album.id} value={album.id}>{album.name}</SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="_disabled" disabled>Tidak ada album untuk unit ini</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -854,7 +1000,7 @@ export function GalleryPage() {
                 <Card key={photo.id} className="overflow-hidden group">
                   <div className="aspect-[4/3] overflow-hidden bg-muted relative">
                     <img
-                      src={photo.imageData}
+                      src={getPhotoUrl(photo)}
                       alt={photo.title}
                       className="w-full h-full object-cover"
                     />
@@ -880,10 +1026,6 @@ export function GalleryPage() {
                       <Badge variant="secondary" className="text-xs">
                         {photo.unit}
                       </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        <Tag size={12} className="mr-1" />
-                        {photo.category}
-                      </Badge>
                       {photo.albumId && (
                         <Badge variant="outline" className="text-xs">
                           <Folder size={12} className="mr-1" />
@@ -902,14 +1044,14 @@ export function GalleryPage() {
                     <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
                       <div className="flex items-center gap-1">
                         <Calendar size={12} />
-                        {format(new Date(photo.uploadedAt), 'dd MMM yyyy', { locale: id })}
+                        {format(new Date(photo.createdAt), 'dd MMM yyyy', { locale: id })}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1">
-                          <Heart size={12} /> {(photo.likes || []).length}
+                          <Heart size={12} /> {photo.likes || 0}
                         </span>
                         <span className="flex items-center gap-1">
-                          <ChatCircle size={12} /> {(photo.comments || []).length}
+                          Views: {photo.views || 0}
                         </span>
                       </div>
                     </div>
@@ -1020,7 +1162,7 @@ export function GalleryPage() {
                     <div className="aspect-video overflow-hidden bg-muted relative">
                       {coverPhoto ? (
                         <img
-                          src={coverPhoto.imageData}
+                          src={getPhotoUrl(coverPhoto)}
                           alt={album.name}
                           className="w-full h-full object-cover"
                         />

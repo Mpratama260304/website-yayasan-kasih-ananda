@@ -1,0 +1,334 @@
+// ═══════════════════════════════════════════════════════════════════
+// PRISMA SCHEMA - PostgreSQL Database
+// ═══════════════════════════════════════════════════════════════════
+// 
+// This schema defines all database models for Yayasan Kasih Ananda
+// - NO localStorage
+// - NO client-side persistence
+// - ALL data server-side with PostgreSQL
+// ═══════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER / ADMIN MODEL
+// ============================================
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   @default("admin")
+  name         String
+  email        String?
+  avatar       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  posts     Post[]
+  sessions  Session[]
+  
+  @@map("users")
+}
+
+// ============================================
+// SESSION MODEL (Server-side sessions)
+// ============================================
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// ============================================
+// POST / BERITA MODEL (WordPress-like)
+// ============================================
+model Post {
+  id            String    @id @default(uuid())
+  title         String
+  slug          String    @unique
+  content       String    @db.Text
+  excerpt       String?   @db.Text
+  featuredImage String?   @map("featured_image")
+  status        PostStatus @default(DRAFT)
+  authorId      String    @map("author_id")
+  publishedAt   DateTime? @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  author     User           @relation(fields: [authorId], references: [id])
+  categories PostCategory[]
+  tags       PostTag[]
+
+  @@map("posts")
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+// ============================================
+// CATEGORY MODEL
+// ============================================
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  posts PostCategory[]
+
+  @@map("categories")
+}
+
+model PostCategory {
+  postId     String @map("post_id")
+  categoryId String @map("category_id")
+
+  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([postId, categoryId])
+  @@map("post_categories")
+}
+
+// ============================================
+// TAG MODEL
+// ============================================
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  posts PostTag[]
+
+  @@map("tags")
+}
+
+model PostTag {
+  postId String @map("post_id")
+  tagId  String @map("tag_id")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+
+// ============================================
+// GALLERY MODEL
+// ============================================
+model GalleryPhoto {
+  id          String       @id @default(uuid())
+  title       String
+  description String?      @db.Text
+  fileUrl     String       @map("file_url")
+  fileType    String       @default("image") @map("file_type")
+  unit        SchoolUnit
+  albumId     String?      @map("album_id")
+  likes       Int          @default(0)
+  views       Int          @default(0)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  album GalleryAlbum? @relation(fields: [albumId], references: [id], onDelete: SetNull)
+
+  @@map("gallery_photos")
+}
+
+model GalleryAlbum {
+  id          String     @id @default(uuid())
+  name        String
+  description String?    @db.Text
+  unit        SchoolUnit
+  coverImage  String?    @map("cover_image")
+  eventDate   DateTime?  @map("event_date")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  photos GalleryPhoto[]
+
+  @@map("gallery_albums")
+}
+
+model GalleryCategory {
+  id        String     @id @default(uuid())
+  name      String
+  unit      SchoolUnit
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@unique([name, unit])
+  @@map("gallery_categories")
+}
+
+enum SchoolUnit {
+  SD
+  SMP
+  SMK
+}
+
+// ============================================
+// ENROLLMENT / PPDB MODEL
+// ============================================
+model Enrollment {
+  id               String           @id @default(uuid())
+  registrationNo   String           @unique @map("registration_no")
+  
+  // Student Data
+  fullName         String           @map("full_name")
+  nik              String?
+  birthPlace       String           @map("birth_place")
+  birthDate        DateTime         @map("birth_date")
+  gender           Gender
+  religion         String?
+  citizenship      String?          @default("Indonesia")
+  
+  // School Info
+  unit             SchoolUnit
+  academicYear     String           @map("academic_year")
+  registrationPath RegistrationPath @default(REGULER) @map("registration_path")
+  
+  // Parent Data (JSON stored)
+  fatherData       Json?            @map("father_data")
+  motherData       Json?            @map("mother_data")
+  guardianData     Json?            @map("guardian_data")
+  
+  // Previous School
+  previousSchool   Json?            @map("previous_school")
+  
+  // Address
+  address          String?          @db.Text
+  province         String?
+  city             String?
+  district         String?
+  village          String?
+  postalCode       String?          @map("postal_code")
+  
+  // Documents (file paths)
+  photoPath        String?          @map("photo_path")
+  birthCertPath    String?          @map("birth_cert_path")
+  familyCardPath   String?          @map("family_card_path")
+  diplomaPath      String?          @map("diploma_path")
+  
+  // Status
+  status           EnrollmentStatus @default(PENDING)
+  notes            String?          @db.Text
+  
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  @@map("enrollments")
+}
+
+enum Gender {
+  LAKI_LAKI
+  PEREMPUAN
+}
+
+enum RegistrationPath {
+  REGULER
+  PRESTASI
+  MUTASI
+  BEASISWA
+}
+
+enum EnrollmentStatus {
+  PENDING
+  REVIEW
+  ACCEPTED
+  REJECTED
+  ENROLLED
+}
+
+// ============================================
+// CONTACT MESSAGE MODEL
+// ============================================
+model ContactMessage {
+  id        String        @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String?
+  message   String        @db.Text
+  status    MessageStatus @default(UNREAD)
+  repliedAt DateTime?     @map("replied_at")
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@map("contact_messages")
+}
+
+enum MessageStatus {
+  UNREAD
+  READ
+  REPLIED
+  ARCHIVED
+}
+
+// ============================================
+// MEDIA LIBRARY MODEL
+// ============================================
+model MediaFile {
+  id           String   @id @default(uuid())
+  filename     String
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  size         Int
+  url          String
+  width        Int?
+  height       Int?
+  alt          String?
+  caption      String?
+  uploadedBy   String?  @map("uploaded_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("media_files")
+}
+
+// ============================================
+// GLOBAL SETTINGS MODEL
+// ============================================
+model GlobalSettings {
+  id              String   @id @default("global")
+  siteName        String   @default("Yayasan Kasih Ananda") @map("site_name")
+  siteDescription String?  @map("site_description") @db.Text
+  logo            String?
+  favicon         String?
+  contactEmail    String?  @map("contact_email")
+  contactPhone    String?  @map("contact_phone")
+  contactAddress  String?  @map("contact_address") @db.Text
+  
+  // Social Media (JSON)
+  socialMedia     Json?    @map("social_media")
+  
+  // PPDB Settings
+  ppdbOpen        Boolean  @default(false) @map("ppdb_open")
+  ppdbOpenMessage String?  @map("ppdb_open_message") @db.Text
+  ppdbClosedMessage String? @map("ppdb_closed_message") @db.Text
+  
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("global_settings")
+}
